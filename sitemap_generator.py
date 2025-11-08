@@ -4,8 +4,9 @@ import time
 import random
 import html
 import re
-from datetime import datetime, timezone
 import os
+from urllib.parse import urlparse, urlunparse, quote
+from datetime import datetime, timezone
 
 # =======================
 # CONFIGURATION
@@ -28,6 +29,41 @@ if os.path.exists(created_dates_file):
                 created_dates[parts[1]] = parts[0]
 
 # =======================
+# URL NORMALIZATION
+# =======================
+def clean_url(url):
+    """Remove Blogger query params, fragments, and normalize URL."""
+    url = url.strip()
+
+    # Remove fragments (#)
+    url = url.split("#")[0]
+
+    # Remove ?m=1 (mobile)
+    if "?m=1" in url:
+        url = url.replace("?m=1", "")
+
+    # Remove trailing slashes (except base)
+    if url.endswith("/") and url != BASE_URL:
+        url = url.rstrip("/")
+
+    # Skip Blogger search pages and feeds
+    if "/search" in url or "/feeds/" in url:
+        return None
+
+    # Ensure it starts with BASE_URL
+    if not url.startswith(BASE_URL):
+        return None
+
+    # Properly encode any special chars (like + or spaces)
+    parsed = urlparse(url)
+    safe_path = quote(parsed.path)
+    safe_query = quote(parsed.query, safe="/=&?+")
+    normalized = urlunparse((parsed.scheme, parsed.netloc, safe_path, "", safe_query, ""))
+
+    return normalized
+
+
+# =======================
 # SIMPLE CRAWLER
 # =======================
 def crawl_site(base_url):
@@ -36,26 +72,28 @@ def crawl_site(base_url):
 
     while to_visit and len(visited) < CRAWL_LIMIT:
         url = to_visit.pop(0)
-        if url in visited:
+        cleaned = clean_url(url)
+        if not cleaned or cleaned in visited:
             continue
 
         try:
-            r = requests.get(url, headers=HEADERS, timeout=10)
+            r = requests.get(cleaned, headers=HEADERS, timeout=10)
             if r.status_code != 200:
                 continue
 
-            visited.add(url)
+            visited.add(cleaned)
             soup = BeautifulSoup(r.text, "html.parser")
 
             for a in soup.find_all("a", href=True):
                 link = a["href"]
-                # normalize
+
+                # Convert relative links
                 if link.startswith("/"):
                     link = base_url.rstrip("/") + link
-                if link.startswith(base_url) and not any(x in link for x in ["#"]):
-                    link = link.split("?m=1")[0]  # remove Blogger mobile param
-                    if link not in visited and link not in to_visit:
-                        to_visit.append(link)
+
+                cleaned_link = clean_url(link)
+                if cleaned_link and cleaned_link not in visited and cleaned_link not in to_visit:
+                    to_visit.append(cleaned_link)
 
         except Exception as e:
             print("Error:", e)
@@ -65,38 +103,35 @@ def crawl_site(base_url):
 
 
 # =======================
-# HELPER FUNCTIONS
+# HELPERS
 # =======================
-def iso_now():
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
+def iso_today():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def changefreq_for(url):
     if re.search(r"/\d{4}/\d{2}/", url):
-        return "daily"  # blog post
-    return "weekly"  # static pages
+        return "daily"
+    return "weekly"
 
 
 # =======================
-# GENERATE XML
+# GENERATE SITEMAP
 # =======================
 def generate_sitemap(urls):
     xml_lines = ['<?xml version="1.0" encoding="UTF-8"?>']
-    xml_lines.append(
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
-    )
+    xml_lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">')
 
     for url in urls:
         safe_url = html.escape(url, quote=True)
 
-        # keep or assign created date
+        # preserve created date
         if url not in created_dates:
-            created_dates[url] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            created_dates[url] = iso_today()
         created = created_dates[url]
 
-        # manipulate lastmod to "appear updated"
-        lastmod = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
+        # manipulate lastmod to look recent
+        lastmod = iso_today()
         priority = round(random.uniform(0.5, 1.0), 2)
         changefreq = changefreq_for(url)
 
@@ -124,6 +159,6 @@ def generate_sitemap(urls):
 # MAIN
 # =======================
 if __name__ == "__main__":
-    print(f"Crawling: {BASE_URL}")
+    print(f"🌐 Crawling: {BASE_URL}")
     urls = crawl_site(BASE_URL)
     generate_sitemap(urls)
