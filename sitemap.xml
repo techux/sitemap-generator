@@ -1,3 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://termux-tech.blogspot.com/</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.71</priority>
+  </url>
+  <url>
+    <loc>https://termux-tech.blogspot.com/2022/11/run-termux-online-free-server-1.html</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.73</priority>
+  </url>
+  <url>
+    <loc>https://termux-tech.blogspot.com/p/write-for-us-termux-tech.html</loc>
+    <lastmod>2026-08-08</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
 </urlset>
